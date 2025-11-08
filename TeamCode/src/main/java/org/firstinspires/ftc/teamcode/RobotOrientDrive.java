@@ -3,6 +3,7 @@ package org.firstinspires.ftc.teamcode;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 
+
 import org.firstinspires.ftc.teamcode.mechanisms.MecanumDrive;
 import org.firstinspires.ftc.teamcode.mechanisms.PushBar;
 import org.firstinspires.ftc.teamcode.mechanisms.IntakeControl;
@@ -18,6 +19,8 @@ public class RobotOrientDrive extends OpMode {
     IntakeControl intake = new IntakeControl();
     LauncherControl launch = new LauncherControl();
     List<Double> barPositions = new ArrayList<>(2);
+    boolean launching = false;
+    double launchSpeed;
     @Override
     public  void init() {
         drive.init(hardwareMap);
@@ -56,56 +59,47 @@ public class RobotOrientDrive extends OpMode {
 
         // activate intake
         if(gamepad1.left_bumper) {
-            intake.setIntakePower(0.6);
+            intake.setIntakePower(1.0);
         }
         else {
             intake.setIntakePower(0.0);
         }
 
         // shoot
-        double launchSpeed;
+        if(gamepad1.a && !launching) {
+            launch.launchBall(1.0);
+            launchSpeed = launch.getLaunchRPM();
+            telemetry.addData("Launch starts at power: ", "1.0");
+            telemetry.addData("Launch RPM: ", launchSpeed);
+            telemetry.update();
+            launching = true;
+        }
 
-        if(gamepad1.a) {
-            launch.launchBall(0.7);
-            launchSpeed = launch.getlaunchRPM();
-            telemetry.addData("Launch RPM: ", launchSpeed);
-        }
-        else {
-            launch.launchBall(0);
-        }
-        if(gamepad1.b) {
-            launch.launchBall(0.8);
-            launchSpeed = launch.getlaunchRPM();
-            telemetry.addData("Launch RPM: ", launchSpeed);
-        }
-        else {
-            launch.launchBall(0);
-        }
-        if(gamepad1.x) {
+        if(gamepad1.b && !launching) {
             launch.launchBall(0.9);
-            launchSpeed = launch.getlaunchRPM();
+            launchSpeed = launch.getLaunchRPM();
+            telemetry.addData("Launch starts at power: ", "0.9");
             telemetry.addData("Launch RPM: ", launchSpeed);
+            telemetry.update();
+            launching = true;
         }
-        else {
-            launch.launchBall(0);
-        }
-        if(gamepad1.y) {
-            launch.launchBall(1);
-            launchSpeed = launch.getlaunchRPM();
+
+        if(gamepad1.x && !launching) {
+            launch.launchBall(0.8);
+            launchSpeed = launch.getLaunchRPM();
+            telemetry.addData("Launch starts at power: ", "0.8");
             telemetry.addData("Launch RPM: ", launchSpeed);
+            telemetry.update();
+            launching = true;
         }
-        else {
+
+        if(gamepad1.y && launching) {
             launch.launchBall(0);
+            launchSpeed = launch.getLaunchRPM();
+            telemetry.addData("Launch stops at power: ", "0");
+            telemetry.addData("Launch RPM: ", launchSpeed);
+            telemetry.update();
+            launching = false;
         }
-
-
-
-    }
-
-    @Override
-    public void stop() {
-        bar.pushBall(0.5, 0.5);
-        telemetry.addData("Stop", bar.getBarPosition());
-        telemetry.update();
     }
 }
