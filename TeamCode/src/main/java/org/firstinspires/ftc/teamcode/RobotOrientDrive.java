@@ -18,12 +18,11 @@ public class RobotOrientDrive extends OpMode {
     PushBar bar = new PushBar();
     IntakeControl intake = new IntakeControl();
     LauncherControl launch = new LauncherControl();
-    List<Double> barPositions = new ArrayList<>(2);
     private boolean launching = false;
     private boolean lastDpadUp = false;
     private boolean lastDpadDown = false;
     private double launchTargetRpm = 6500.0;
-    private double launchRpmAdjustment = 500.0;
+    private final double launchRpmAdjustment = 500.0;
     double launchRpm;
 
 
