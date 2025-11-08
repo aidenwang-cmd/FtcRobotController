@@ -9,9 +9,6 @@ import org.firstinspires.ftc.teamcode.mechanisms.PushBar;
 import org.firstinspires.ftc.teamcode.mechanisms.IntakeControl;
 import org.firstinspires.ftc.teamcode.mechanisms.LauncherControl;
 
-import java.util.ArrayList;
-import java.util.List;
-
 @TeleOp()
 public class RobotOrientDrive extends OpMode {
     MecanumDrive drive = new MecanumDrive();
