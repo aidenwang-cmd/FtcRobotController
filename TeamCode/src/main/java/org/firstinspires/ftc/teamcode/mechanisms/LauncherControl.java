@@ -10,12 +10,12 @@ public class LauncherControl {
     private static final double TICKS_PER_REV = 28; // = 7 * 4 for NeveRest 1:1 motor
     private static final double GEAR_RATIO = 50.0/30.0; // Motor : Wheel = 50: 30
     private static final double MAX_MOTOR_RPM = 6600; // for NeveRest 1:1 motor
-    private static final double MAX_TARGET_RPM = MAX_MOTOR_RPM * GEAR_RATIO;
-    private static final double MIN_TARGET_RPM = 5000; // test out when shooting in shortest range
+    private static final double MAX_WHEEL_RPM = MAX_MOTOR_RPM * GEAR_RATIO;
+    private static final double MIN_WHEEL_RPM = 5000; // test out when shooting in shortest range
     private static final double kP = 12.0; // test out
     private static final double kI = 3.0; // test out
     private static final double kD = 0.0; // test out
-    private static final double kF = MAX_MOTOR_RPM * TICKS_PER_REV * 60;
+    private static final double kF = kP / (MAX_MOTOR_RPM * TICKS_PER_REV / 60);
     private DcMotorEx launchMotor;
 
 
@@ -36,14 +36,14 @@ public class LauncherControl {
         return ticksPerSecToRpm(launchMotor.getVelocity() * GEAR_RATIO);
     }
 
-    public double startLaunch(double targetRpm) {
+    public double startLaunch(double wheelRpm) {
         launchMotor.setVelocityPIDFCoefficients(kP, kI, kD, kF);
-        launchMotor.setVelocity(rpmToTicksPerSec(targetRpm / GEAR_RATIO));
+        launchMotor.setVelocity(rpmToTicksPerSec(wheelRpm / GEAR_RATIO));
         return ticksPerSecToRpm(launchMotor.getVelocity() * GEAR_RATIO);
     }
 
-    public double adjustLaunchRpm(double currentTargetRpm, double rpmChange) {
-        return Math.min(MAX_TARGET_RPM, Math.max(MIN_TARGET_RPM, currentTargetRpm + rpmChange));
+    public double adjustLaunchRpm(double currentWheelRpm, double rpmChange) {
+        return Math.min(MAX_WHEEL_RPM, Math.max(MIN_WHEEL_RPM, currentWheelRpm + rpmChange));
     }
 
 }

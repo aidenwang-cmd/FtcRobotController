@@ -18,8 +18,8 @@ public class RobotOrientDrive extends OpMode {
     private boolean launching = false;
     private boolean lastDpadUp = false;
     private boolean lastDpadDown = false;
-    private double launchTargetRpm = 6500.0;
-    private final double launchRpmAdjustment = 500.0;
+    private double wheelTargetRpm = 6500.0;
+    private final double wheelRpmAdjustment = 500.0;
     double launchRpm;
 
 
@@ -71,20 +71,20 @@ public class RobotOrientDrive extends OpMode {
         // shoot: dpad up - nudge up target RPM every press by a fixed amount
         boolean dpadUp = gamepad1.dpad_up;
         if(dpadUp && !lastDpadUp) {
-            launchTargetRpm = launch.adjustLaunchRpm(launchTargetRpm,launchRpmAdjustment);
+            wheelTargetRpm = launch.adjustLaunchRpm(wheelTargetRpm, wheelRpmAdjustment);
         }
         lastDpadUp = dpadUp;
 
         // shoot: dpad down - nudge down target RPM every press by a fixed amount
         boolean dpadDown = gamepad1.dpad_down;
         if (dpadDown && !lastDpadDown) {
-            launchTargetRpm = launch.adjustLaunchRpm(launchTargetRpm,-launchRpmAdjustment);
+            wheelTargetRpm = launch.adjustLaunchRpm(wheelTargetRpm,-wheelRpmAdjustment);
         }
         lastDpadDown = dpadDown;
 
         // shoot: a - start launching wheel at target RPM
         if(gamepad1.a && !launching) {
-            launchRpm = launch.startLaunch(launchTargetRpm);
+            launchRpm = launch.startLaunch(wheelTargetRpm);
             telemetry.addData("Launch starts, target RPM: ", "6000");
             telemetry.addData("Launch actual RPM: ", (int) launchRpm);
             launching = true;
