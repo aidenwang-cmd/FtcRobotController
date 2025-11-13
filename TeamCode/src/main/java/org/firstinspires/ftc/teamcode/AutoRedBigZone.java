@@ -19,6 +19,7 @@ public class AutoRedBigZone extends LinearOpMode{
     IntakeControl intake = new IntakeControl();
     LauncherControl launch = new LauncherControl();
     YawControl robotYaw = new YawControl();
+    boolean towardRight = true;
 
     @Override
     public void runOpMode() throws InterruptedException {
@@ -36,7 +37,7 @@ public class AutoRedBigZone extends LinearOpMode{
 
         driveForwardInchesVel(24, drive.percentMaxRpm(0.5), 0.0, 5.0);
         sleep(250);
-        //driveStrafeInchesVel(24, drive.percentMaxRpm(0.4), 0.0, 6, true);
+        //driveStrafeInchesVel(24, drive.percentMaxRpm(0.4), 0.0, 6, towardRight);
         //sleep(250);
         turnByDeg(45, 2.0);
         sleep(200);
@@ -48,12 +49,12 @@ public class AutoRedBigZone extends LinearOpMode{
     }
 
     private void driveForwardInchesVel(double inches, double baseRPM, double targetDeg, double timeoutSec) {
-        double baseVelTps = drive.forwardRunToTargetPosition(inches, baseRPM);
+        double baseVelTps = drive.forwardRunToTargetPosition(inches, baseRPM); // set target position and get base velocity in TPS ready
         ElapsedTime timer = new ElapsedTime();
         timer.reset();
         while (opModeIsActive() && timer.seconds() < timeoutSec && drive.isMotorBusy()) {
             double yawErr = targetDeg - robotYaw.getYaw();
-            drive.forwardAdjustYawError(yawErr, baseVelTps);
+            drive.forwardAdjustYawError(yawErr, baseVelTps); // give each wheel different adjusted velocity based on yaw error
             telemetry.addData("Mode", "Straight");
             telemetry.addData("Target - Yaw Error", "%.1f - %.1f", targetDeg, yawErr);
             telemetry.update();
@@ -63,12 +64,12 @@ public class AutoRedBigZone extends LinearOpMode{
     }
 
     private void driveStrafeInchesVel(double inches, double baseRPM, double targetDeg, double timeoutSec, boolean right) {
-        double baseVelTps = drive.strafeRunToTargetPosition(inches, baseRPM, right);
+        double baseVelTps = drive.strafeRunToTargetPosition(inches, baseRPM, right); // set target position and get base velocity in TPS ready
         ElapsedTime timer = new ElapsedTime();
         timer.reset();
         while (opModeIsActive() && timer.seconds() < timeoutSec && drive.isMotorBusy()) {
             double yawErr = targetDeg - robotYaw.getYaw();
-            drive.strafeAdjustYawError(yawErr, baseVelTps);
+            drive.strafeAdjustYawError(yawErr, baseVelTps); // give each wheel different adjusted velocity based on yaw error
             telemetry.addData("Mode", "Strafe" + (right ? "Right" : "Left"));
             telemetry.addData("Target - Yaw Error", "%.1f - %.1f", targetDeg, yawErr);
             telemetry.update();
@@ -83,7 +84,8 @@ public class AutoRedBigZone extends LinearOpMode{
         timer.reset();
         while (opModeIsActive() && timer.seconds() < timeoutSec) {
             double yawErr = targetDeg - robotYaw.getYaw();
-            if(drive.turnAdjustYawErr(yawErr) == 1 && ++settled >= SETTLE_LOOPS) break;
+            // Stop adjusting, if turned into tolerance range of target and it has been adjusted enough time (SETTLE_LOOPS).
+            if(drive.turnAdjustYawErr(yawErr) && ++settled >= SETTLE_LOOPS) break;
             telemetry.addData("Target - Yaw Error", "%.1f - %.1f", targetDeg, yawErr);
             telemetry.update();
         }
