@@ -13,6 +13,7 @@ import org.firstinspires.ftc.teamcode.mechanisms.YawControl;
 @Autonomous
 public class AutoRedSmallZone extends LinearOpMode{
 
+    private static final int    SETTLE_LOOPS = 6;    // how many consecutive loops inside tolerance before stopping
     MecanumDrive drive = new MecanumDrive();
     PushBar bar = new PushBar();
     IntakeControl intake = new IntakeControl();
@@ -26,7 +27,7 @@ public class AutoRedSmallZone extends LinearOpMode{
         intake.init(hardwareMap);
         launch.init(hardwareMap);
         robotYaw.init(hardwareMap);
-        robotYaw.restYaw();
+        robotYaw.resetYaw();
 
         telemetry.addLine("Ready");
         telemetry.update();
@@ -48,7 +49,7 @@ public class AutoRedSmallZone extends LinearOpMode{
     }
 
     private void driveForwardInchesVel(double inches, double baseRPM, double targetDeg, double timeoutSec) {
-        double baseVelTps = drive.forwardRunToTargetPosition(inches, baseRPM);;
+        double baseVelTps = drive.forwardRunToTargetPosition(inches, baseRPM);
         ElapsedTime timer = new ElapsedTime();
         timer.reset();
         while (opModeIsActive() && timer.seconds() < timeoutSec && drive.isMotorBusy()) {
@@ -63,7 +64,7 @@ public class AutoRedSmallZone extends LinearOpMode{
     }
 
     private void driveStrafeInchesVel(double inches, double baseRPM, double targetDeg, double timeoutSec, boolean right) {
-        double baseVelTps = drive.strafeRunToTargetPosition(inches, baseRPM, right);;
+        double baseVelTps = drive.strafeRunToTargetPosition(inches, baseRPM, right);
         ElapsedTime timer = new ElapsedTime();
         timer.reset();
         while (opModeIsActive() && timer.seconds() < timeoutSec && drive.isMotorBusy()) {
@@ -80,10 +81,10 @@ public class AutoRedSmallZone extends LinearOpMode{
     private void turnToHeadingDeg(double targetDeg, double timeoutSec) {
         ElapsedTime timer = new ElapsedTime();
         int settled = 0;
-
+        timer.reset();
         while (opModeIsActive() && timer.seconds() < timeoutSec) {
             double yawErr = targetDeg - robotYaw.getYaw();
-            if(drive.turnAdjustYawErr(yawErr, settled)) break;
+            if(drive.turnAdjustYawErr(yawErr) == 1 && ++settled >= SETTLE_LOOPS) break;
             telemetry.addData("Target - Yaw Error", "%.1f - %.1f", targetDeg, yawErr);
             telemetry.update();
         }
@@ -99,10 +100,13 @@ public class AutoRedSmallZone extends LinearOpMode{
 
     private void shooting(double wheelTargetRpm) {
         launch.startLaunch(wheelTargetRpm);
-        for(int i = 0; i < 3; i++) {
-            sleep(1000);
+        ElapsedTime spin = new ElapsedTime();
+        spin.reset();
+        while (opModeIsActive() && spin.seconds() < 2.0) sleep(10);
+        for(int i = 0; i < 3 && opModeIsActive(); i++) {
+            sleep(250);
             bar.pushBall(0.55, 0.2);
-            sleep(1000);
+            sleep(500);
             bar.release(0.65, 1.0);
         }
         launch.stopLaunch();

@@ -11,11 +11,11 @@ public class LauncherControl {
     private static final double GEAR_RATIO = 50.0/30.0; // Motor : Wheel = 50: 30
     private static final double MAX_MOTOR_RPM = 6600; // for NeveRest 1:1 motor
     private static final double MAX_WHEEL_RPM = MAX_MOTOR_RPM * GEAR_RATIO;
-    private static final double MIN_WHEEL_RPM = 5000; // test out when shooting in shortest range
-    private static final double kP = 12.0; // test out
-    private static final double kI = 3.0; // test out
+    private static final double MIN_WHEEL_RPM = 2000; // test out when shooting in shortest range
+    private static final double kP = 3.0; // test out
+    private static final double kI = 0.3; // test out
     private static final double kD = 0.0; // test out
-    private static final double kF = kP / (MAX_MOTOR_RPM * TICKS_PER_REV / 60);
+    private static final double kF = 32767 / (MAX_MOTOR_RPM * TICKS_PER_REV / 60);
     private DcMotorEx launchMotor;
 
 
@@ -26,20 +26,26 @@ public class LauncherControl {
         launchMotor.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
         launchMotor.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
         launchMotor.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT);
+        launchMotor.setVelocityPIDFCoefficients(kP, kI, kD, kF);
     }
 
-    double rpmToTicksPerSec(double rpm) { return rpm * TICKS_PER_REV * 60; }
+    double rpmToTicksPerSec(double rpm) { return rpm * TICKS_PER_REV / 60; }
     double ticksPerSecToRpm(double tps) { return tps * 60.0 / TICKS_PER_REV; }
 
-    public double stopLaunch() {
-        launchMotor.setVelocity(0);
-        return ticksPerSecToRpm(launchMotor.getVelocity() * GEAR_RATIO);
+    // Read wheel RPM from current motor velocity
+    public double currentWheelRpm() {
+        double motorTps = launchMotor.getVelocity();                   // motor tps
+        return ticksPerSecToRpm(motorTps) * GEAR_RATIO;                // wheel rpm
     }
 
-    public double startLaunch(double wheelRpm) {
-        launchMotor.setVelocityPIDFCoefficients(kP, kI, kD, kF);
-        launchMotor.setVelocity(rpmToTicksPerSec(wheelRpm / GEAR_RATIO));
-        return ticksPerSecToRpm(launchMotor.getVelocity() * GEAR_RATIO);
+    public void stopLaunch() {
+        launchMotor.setVelocity(0);
+    }
+
+    public void startLaunch(double desiredWheelRpm) {
+        double wheelRpm = Math.min(MAX_WHEEL_RPM, Math.max(MIN_WHEEL_RPM, desiredWheelRpm));
+        double motorRpm = wheelRpm / GEAR_RATIO;
+        launchMotor.setVelocity(rpmToTicksPerSec(motorRpm));
     }
 
     public double adjustLaunchRpm(double currentWheelRpm, double rpmChange) {

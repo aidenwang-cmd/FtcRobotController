@@ -20,7 +20,7 @@ public class YawControl {
         return imu.getRobotYawPitchRollAngles().getYaw(AngleUnit.DEGREES);
     }
 
-    public void restYaw() {
+    public void resetYaw() {
         imu.resetYaw();
     }
 }
