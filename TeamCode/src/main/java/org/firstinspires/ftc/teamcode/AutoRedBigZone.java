@@ -11,7 +11,7 @@ import org.firstinspires.ftc.teamcode.mechanisms.LauncherControl;
 import org.firstinspires.ftc.teamcode.mechanisms.YawControl;
 
 @Autonomous
-public class AutoRedSmallZone extends LinearOpMode{
+public class AutoRedBigZone extends LinearOpMode{
 
     private static final int    SETTLE_LOOPS = 6;    // how many consecutive loops inside tolerance before stopping
     MecanumDrive drive = new MecanumDrive();
@@ -34,18 +34,17 @@ public class AutoRedSmallZone extends LinearOpMode{
         waitForStart();
         if(isStopRequested()) return;
 
-        driveForwardInchesVel(48, drive.percentMaxRpm(0.5), 0.0, 5.0);
+        driveForwardInchesVel(24, drive.percentMaxRpm(0.5), 0.0, 5.0);
         sleep(250);
-        driveStrafeInchesVel(24, drive.percentMaxRpm(0.4), 0.0, 6, true);
-        sleep(250);
+        //driveStrafeInchesVel(24, drive.percentMaxRpm(0.4), 0.0, 6, true);
+        //sleep(250);
         turnByDeg(45, 2.0);
         sleep(200);
-        shooting(6500.0);
+        shooting(3500.0);
         turnToHeadingDeg(0.0, 2.5);
         sleep(200);
-        driveForwardInchesVel(-12, drive.percentMaxRpm(0.5), 0.0, 3.5);
+        driveForwardInchesVel(12, drive.percentMaxRpm(0.5), 0.0, 3.5);
         drive.stopDrive();
-
     }
 
     private void driveForwardInchesVel(double inches, double baseRPM, double targetDeg, double timeoutSec) {
@@ -102,12 +101,12 @@ public class AutoRedSmallZone extends LinearOpMode{
         launch.startLaunch(wheelTargetRpm);
         ElapsedTime spin = new ElapsedTime();
         spin.reset();
-        while (opModeIsActive() && spin.seconds() < 2.0) sleep(10);
+        while (opModeIsActive() && spin.seconds() < 7.0) sleep(10);
         for(int i = 0; i < 3 && opModeIsActive(); i++) {
-            sleep(250);
             bar.pushBall(0.55, 0.2);
             sleep(500);
             bar.release(0.65, 1.0);
+            sleep(1500);
         }
         launch.stopLaunch();
     }

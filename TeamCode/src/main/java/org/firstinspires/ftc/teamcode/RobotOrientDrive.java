@@ -19,7 +19,7 @@ public class RobotOrientDrive extends OpMode {
     private boolean lastDpadUp = false;
     private boolean lastDpadDown = false;
     private double wheelTargetRpm;
-    private final double wheelRpmAdjustment = 500.0;
+    private final double wheelRpmAdjustment = 100.0;
     double launchRpm;
 
 
@@ -92,21 +92,21 @@ public class RobotOrientDrive extends OpMode {
 
         // shoot: a - start launching wheel at high speed
         if (gamepad1.a && !launching) {
-            wheelTargetRpm = 8000.0;
+            wheelTargetRpm = 4000.0;
             launch.startLaunch(wheelTargetRpm);
             launching = true;
         }
 
         // shoot: b - start launching wheel at medium speed
         if (gamepad1.b && !launching) {
-            wheelTargetRpm = 6000.0;
+            wheelTargetRpm = 3500.0;
             launch.startLaunch(wheelTargetRpm);
             launching = true;
         }
 
         // shoot: x - start launching wheel at low speed
         if (gamepad1.x && !launching) {
-            wheelTargetRpm = 4000.0;
+            wheelTargetRpm = 3000.0;
             launch.startLaunch(wheelTargetRpm);
             launching = true;
         }
