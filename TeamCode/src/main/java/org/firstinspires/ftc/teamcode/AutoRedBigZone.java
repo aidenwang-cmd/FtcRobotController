@@ -11,9 +11,9 @@ import org.firstinspires.ftc.teamcode.mechanisms.LauncherControl;
 import org.firstinspires.ftc.teamcode.mechanisms.YawControl;
 
 @Autonomous
-public class AutoRedBigZone extends LinearOpMode{
+public class AutoRedBigZone extends LinearOpMode {
 
-    private static final int    SETTLE_LOOPS = 6;    // how many consecutive loops inside tolerance before stopping
+    private static final int SETTLE_LOOPS = 6;    // how many consecutive loops inside tolerance before stopping
     MecanumDrive drive = new MecanumDrive();
     PushBar bar = new PushBar();
     IntakeControl intake = new IntakeControl();
@@ -33,18 +33,18 @@ public class AutoRedBigZone extends LinearOpMode{
         telemetry.addLine("Ready");
         telemetry.update();
         waitForStart();
-        if(isStopRequested()) return;
+        if (isStopRequested()) return;
 
-        driveForwardInchesVel(24, drive.percentMaxRpm(0.5), 0.0, 5.0);
-        sleep(250);
+        driveForwardInchesVel(24, drive.percentMaxRpm(0.5), 0.0, 2.0);
+        sleep(50);
         //driveStrafeInchesVel(24, drive.percentMaxRpm(0.4), 0.0, 6, towardRight);
         //sleep(250);
-        turnByDeg(45, 2.0);
-        sleep(200);
-        shooting(3500.0);
+        turnByDeg(140, 2.0);
+        sleep(50);
+        shooting(2900.0);
         turnToHeadingDeg(0.0, 2.5);
-        sleep(200);
-        driveForwardInchesVel(12, drive.percentMaxRpm(0.5), 0.0, 3.5);
+        sleep(50);
+        driveForwardInchesVel(24, drive.percentMaxRpm(0.5), 0.0, 2.0);
         drive.stopDrive();
     }
 
@@ -85,7 +85,7 @@ public class AutoRedBigZone extends LinearOpMode{
         while (opModeIsActive() && timer.seconds() < timeoutSec) {
             double yawErr = targetDeg - robotYaw.getYaw();
             // Stop adjusting, if turned into tolerance range of target and it has been adjusted enough time (SETTLE_LOOPS).
-            if(drive.turnAdjustYawErr(yawErr) && ++settled >= SETTLE_LOOPS) break;
+            if (drive.turnAdjustYawErr(yawErr) && ++settled >= SETTLE_LOOPS) break;
             telemetry.addData("Target - Yaw Error", "%.1f - %.1f", targetDeg, yawErr);
             telemetry.update();
         }
@@ -103,14 +103,15 @@ public class AutoRedBigZone extends LinearOpMode{
         launch.startLaunch(wheelTargetRpm);
         ElapsedTime spin = new ElapsedTime();
         spin.reset();
-        while (opModeIsActive() && spin.seconds() < 7.0) sleep(10);
-        for(int i = 0; i < 3 && opModeIsActive(); i++) {
-            bar.pushBall(0.55, 0.2);
-            sleep(500);
-            bar.release(0.65, 1.0);
-            sleep(1500);
+        while (opModeIsActive() && spin.seconds() < 7.0) {
+            sleep(3000);
+            for (int i = 0; i < 4 && opModeIsActive(); i++) {
+                bar.pushBall(0.55, 0.2);
+                sleep(400);
+                bar.release(0.65, 1.0);
+                sleep(1000);
+            }
+            launch.stopLaunch();
         }
-        launch.stopLaunch();
     }
-
 }

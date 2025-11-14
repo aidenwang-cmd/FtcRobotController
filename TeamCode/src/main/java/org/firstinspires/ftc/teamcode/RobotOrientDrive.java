@@ -92,21 +92,21 @@ public class RobotOrientDrive extends OpMode {
 
         // shoot: a - start launching wheel at high speed
         if (gamepad1.a && !launching) {
-            wheelTargetRpm = 4000.0; // about 11 ft shooting distance
+            wheelTargetRpm = 3800.0; // about 7 ft shooting distance
             launch.startLaunch(wheelTargetRpm);
             launching = true;
         }
 
         // shoot: b - start launching wheel at medium speed
         if (gamepad1.b && !launching) {
-            wheelTargetRpm = 3500.0; // about 4.2 ft shooting distance
+            wheelTargetRpm = 3400.0; // about 50" shooting distance
             launch.startLaunch(wheelTargetRpm);
             launching = true;
         }
 
         // shoot: x - start launching wheel at low speed
         if (gamepad1.x && !launching) {
-            wheelTargetRpm = 3000.0; // about 1.5 ft shooting distance
+            wheelTargetRpm = 2900.0; // about 15" shooting distance
             launch.startLaunch(wheelTargetRpm);
             launching = true;
         }
