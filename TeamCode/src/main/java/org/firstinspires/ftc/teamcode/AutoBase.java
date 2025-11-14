@@ -33,9 +33,10 @@ public class AutoBase extends LinearOpMode {
         launcher.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT);
 
         waitForStart();
+        forward(0.3, 5000);
 
-        while(opModeIsActive()) {
-            forward(0.3, 5000);
+        while(opModeIsActive() && fl.isBusy() && fr.isBusy()) {
+            telemetry.addData("Auto Drive:", "straight");
         }
     }
 
