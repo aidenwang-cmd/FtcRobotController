@@ -1,0 +1,749 @@
+package org.firstinspires.ftc.teamcode;
+
+import com.qualcomm.hardware.lynx.LynxModule;
+import com.qualcomm.robotcore.eventloop.opmode.OpMode;
+import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
+import com.qualcomm.robotcore.hardware.DcMotorEx;
+import com.qualcomm.robotcore.hardware.PIDFCoefficients;
+
+import org.firstinspires.ftc.robotcore.external.hardware.camera.WebcamName;
+import org.firstinspires.ftc.vision.VisionPortal;
+import org.firstinspires.ftc.vision.apriltag.AprilTagDetection;
+import org.firstinspires.ftc.vision.apriltag.AprilTagProcessor;
+import org.firstinspires.ftc.teamcode.mechanisms.MecanumDrive;
+import org.firstinspires.ftc.teamcode.mechanisms.PushBar;
+import org.firstinspires.ftc.teamcode.mechanisms.IntakeControl;
+import org.firstinspires.ftc.teamcode.mechanisms.LauncherControl;
+
+import org.opencv.core.*;
+import org.opencv.imgproc.Imgproc;
+import org.opencv.imgproc.Moments;
+import org.openftc.easyopencv.OpenCvCamera;
+import org.openftc.easyopencv.OpenCvCameraFactory;
+import org.openftc.easyopencv.OpenCvCameraRotation;
+import org.openftc.easyopencv.OpenCvPipeline;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+
+@TeleOp(name = "Integrated Vision Shooter", group = "Competition")
+public class IntegratedVisionShooter extends OpMode {
+    
+    MecanumDrive drive = new MecanumDrive();
+    PushBar bar = new PushBar();
+    IntakeControl intake = new IntakeControl();
+    LauncherControl launch = new LauncherControl();
+    
+    private boolean launching = false;
+    private double wheelTargetRpm = 0.0;
+    private double launchRpm;
+    private boolean shooterReady = false;
+    
+    // Vision systems
+    private AprilTagProcessor aprilTag;
+    private VisionPortal visionPortal;
+    private OpenCvCamera yellowCamera;
+    private YellowVisionPipeline yellowPipeline;
+    
+    // Mode management
+    private boolean autoTargetEnabled = false;
+    private boolean yellowTrackingEnabled = false;
+    private boolean lastX = false;
+    private boolean lastB = false;
+    private boolean lastCircle = false;
+    private boolean targetLocked = false;
+    
+    // Rotation to target
+    private boolean rotatingToTarget = false;
+    private double targetRobotAngle = 0.0;
+    private double rotationStartTime = 0.0;
+    private static final double ROTATION_TIMEOUT = 3.0; // seconds
+    
+    // Alliance management
+    private boolean redAlliance = true;
+    private boolean lastY = false;
+    
+    // Define AprilTag IDs for FTC 2023-2024 season
+    private static final int[] RED_ALLIANCE_TAGS = {1,2,3,4};
+    private static final int[] BLUE_ALLIANCE_TAGS = {5,6,7,8};
+    
+    // Target information
+    private double targetDistance = 0.0;
+    private double targetYaw = 0.0;
+    private double targetX = 0.0;
+    private int targetId = -1;
+    private String targetAlliance = "NONE";
+    
+    // Yellow object information
+    private double yellowTargetX = 0.0;
+    private double yellowTargetY = 0.0;
+    private double yellowTargetAngle = 0.0;
+    private boolean yellowTargetLocked = false;
+    
+    // Control states
+    private boolean lastDpadUp = false;
+    private boolean lastDpadDown = false;
+    private boolean lastRightBumper = false;
+    private final double wheelRpmAdjustment = 100.0;
+    private boolean barExtended = false;
+    
+    // RPM Control parameters
+    private final double rpmTolerance = 50.0;
+    
+    // Alignment gains
+    private static final double TURN_GAIN = 0.03;
+    private static final double STRAFE_GAIN = 0.025;
+    private static final double DRIVE_GAIN = 0.02;
+    
+    // Rotation to target gains
+    private static final double ROTATION_GAIN = 0.015;
+    private static final double ROTATION_TOLERANCE = 2.0; // degrees
+    
+    // Alignment tolerances
+    private static final double TOLERANCE_YAW = 1.5;
+    private static final double TOLERANCE_X = 1.0;
+    private static final double TOLERANCE_DISTANCE = 1.5;
+    
+    // Yellow object tracking gains
+    private static final double YELLOW_TURN_GAIN = 0.02;
+    private static final double YELLOW_STRAFE_GAIN = 0.015;
+    
+    // Optimal shooting parameters
+    private static final double OPTIMAL_SHOOTING_DISTANCE = 24.0;
+    private static final double MIN_SHOOTING_DISTANCE = 18.0;
+    private static final double MAX_SHOOTING_DISTANCE = 48.0;
+
+    @Override
+    public void init() {
+        drive.init(hardwareMap);
+        bar.init(hardwareMap);
+        intake.init(hardwareMap);
+        launch.init(hardwareMap);
+        
+        // Initialize AprilTag processor
+        aprilTag = new AprilTagProcessor.Builder()
+            .setDrawAxes(true)
+            .setDrawCubeProjection(true)
+            .setDrawTagOutline(true)
+            .setTagFamily(AprilTagProcessor.TagFamily.TAG_36h11)
+            .setTagLibrary(AprilTagProcessor.TagLibrary.CURRENT)
+            .build();
+            
+        // Initialize VisionPortal for AprilTag
+        visionPortal = new VisionPortal.Builder()
+            .setCamera(hardwareMap.get(WebcamName.class, "Webcam 1"))
+            .addProcessor(aprilTag)
+            .setCameraResolution(new Size(640, 480))
+            .build();
+        
+        // Initialize Yellow Object Detection camera
+        int cameraMonitorViewId = hardwareMap.appContext.getResources().getIdentifier(
+            "cameraMonitorViewId", "id", hardwareMap.appContext.getPackageName());
+        yellowCamera = OpenCvCameraFactory.getInstance().createWebcam(
+            hardwareMap.get(WebcamName.class, "Webcam 1"), cameraMonitorViewId);
+        yellowPipeline = new YellowVisionPipeline();
+        yellowCamera.setPipeline(yellowPipeline);
+        
+        yellowCamera.openCameraDeviceAsync(new OpenCvCamera.AsyncCameraOpenListener() {
+            @Override
+            public void onOpened() {
+                yellowCamera.startStreaming(640, 480, OpenCvCameraRotation.UPRIGHT);
+            }
+
+            @Override
+            public void onError(int errorCode) {
+                telemetry.addData("Yellow Camera Error", errorCode);
+            }
+        });
+        
+        // Bulk caching optimization
+        for (LynxModule hub : hardwareMap.getAll(LynxModule.class)) {
+            hub.setBulkCachingMode(LynxModule.BulkCachingMode.AUTO);
+        }
+
+        telemetry.addData("Status", "Initialized - Integrated Vision System");
+        telemetry.addData("Vision Systems", "AprilTag + Yellow Object Detection");
+        telemetry.addData("Current Alliance", redAlliance ? "RED" : "BLUE");
+        telemetry.addData("Circle Button", "Rotate Robot to Face AprilTag");
+        telemetry.update();
+    }
+    
+    @Override
+    public void start() {
+        bar.pushBall(0.65, 1.0);
+    }
+    
+    private double dead(double v) {
+        return Math.abs(v) < 0.05 ? 0.0 : v;
+    }
+    
+    private void manageShooterRPM() {
+        if (launching) {
+            launchRpm = launch.currentWheelRpm();
+            shooterReady = Math.abs(launchRpm - wheelTargetRpm) <= rpmTolerance && 
+                          launchRpm >= wheelTargetRpm - rpmTolerance;
+        }
+    }
+    
+    private void setShooterRPM(double targetRPM) {
+        wheelTargetRpm = targetRPM;
+        launch.startLaunch(wheelTargetRpm);
+        launching = true;
+        shooterReady = false;
+    }
+    
+    // Check if a tag ID belongs to the current alliance
+    private boolean isTagInCurrentAlliance(int tagId) {
+        if (redAlliance) {
+            for (int redTag : RED_ALLIANCE_TAGS) {
+                if (tagId == redTag) return true;
+            }
+        } else {
+            for (int blueTag : BLUE_ALLIANCE_TAGS) {
+                if (tagId == blueTag) return true;
+            }
+        }
+        return false;
+    }
+    
+    // Get alliance name from tag ID
+    private String getAllianceFromTagId(int tagId) {
+        for (int redTag : RED_ALLIANCE_TAGS) {
+            if (tagId == redTag) return "RED";
+        }
+        for (int blueTag : BLUE_ALLIANCE_TAGS) {
+            if (tagId == blueTag) return "BLUE";
+        }
+        return "UNKNOWN";
+    }
+    
+    // Calculate RPM based on distance
+    private double calculateRpmFromDistance(double distanceInches) {
+        double baseRpm = 2800.0;
+        double distanceFactor = 30.0;
+        double distanceFromOptimal = distanceInches - OPTIMAL_SHOOTING_DISTANCE;
+        double calculatedRpm = baseRpm + (distanceFromOptimal * distanceFactor);
+        
+        double minRpm = 2500.0;
+        double maxRpm = 4000.0;
+        
+        return Math.max(minRpm, Math.min(maxRpm, calculatedRpm));
+    }
+    
+    // Get the best AprilTag detection
+    private AprilTagDetection getBestAprilTagDetection() {
+        List<AprilTagDetection> detections = aprilTag.getDetections();
+        if (detections.isEmpty()) {
+            return null;
+        }
+        
+        AprilTagDetection bestTarget = null;
+        double bestScore = Double.MAX_VALUE;
+        
+        for (AprilTagDetection detection : detections) {
+            if (detection.metadata != null && detection.ftcPose != null) {
+                if (!isTagInCurrentAlliance(detection.id)) {
+                    continue;
+                }
+                
+                double distanceScore = Math.abs(detection.ftcPose.range - OPTIMAL_SHOOTING_DISTANCE) * 2.0;
+                double alignmentScore = Math.abs(detection.ftcPose.yaw) + Math.abs(detection.ftcPose.x);
+                double totalScore = distanceScore + alignmentScore;
+                
+                if (totalScore < bestScore) {
+                    bestScore = totalScore;
+                    bestTarget = detection;
+                }
+            }
+        }
+        
+        return bestTarget;
+    }
+    
+    // Rotate entire robot to face AprilTag
+    private boolean rotateRobotToAprilTag() {
+        AprilTagDetection bestTarget = getBestAprilTagDetection();
+        if (bestTarget == null) {
+            rotatingToTarget = false;
+            return false;
+        }
+        
+        // Get the yaw angle of the AprilTag relative to camera
+        double tagYaw = bestTarget.ftcPose.yaw;
+        
+        // Calculate the required robot rotation to face the tag directly
+        // When tagYaw is 0, the tag is centered. We want to rotate until tagYaw is 0.
+        double rotationError = -tagYaw; // Negative because we want to reduce yaw to 0
+        
+        // Check if we're within tolerance
+        if (Math.abs(rotationError) <= ROTATION_TOLERANCE) {
+            // Successfully facing the tag
+            drive.drive(0, 0, 0);
+            rotatingToTarget = false;
+            telemetry.addData("Rotation Status", "FACING TARGET ✓");
+            return true;
+        }
+        
+        // Calculate rotation power based on error
+        double rotationPower = rotationError * ROTATION_GAIN;
+        
+        // Limit rotation power for smooth movement
+        double maxRotationPower = 0.4;
+        rotationPower = Math.max(-maxRotationPower, Math.min(maxRotationPower, rotationPower));
+        
+        // Apply minimum power to overcome friction
+        if (Math.abs(rotationPower) < 0.1) {
+            rotationPower = Math.copySign(0.1, rotationPower);
+        }
+        
+        // Rotate the entire robot
+        drive.drive(0, 0, rotationPower);
+        
+        telemetry.addData("Rotation Status", "ROTATING TO TARGET...");
+        telemetry.addData("Rotation Error", "%.1f°", rotationError);
+        telemetry.addData("Rotation Power", "%.2f", rotationPower);
+        
+        // Check for timeout
+        if (getRuntime() - rotationStartTime > ROTATION_TIMEOUT) {
+            rotatingToTarget = false;
+            telemetry.addData("Rotation Status", "TIMEOUT - STOPPED");
+            return false;
+        }
+        
+        return true;
+    }
+    
+    // AprilTag tracking function
+    private boolean acquireAndTrackAprilTag() {
+        AprilTagDetection bestTarget = getBestAprilTagDetection();
+        if (bestTarget == null) {
+            targetLocked = false;
+            targetAlliance = "NONE";
+            return false;
+        }
+        
+        targetDistance = bestTarget.ftcPose.range;
+        targetYaw = bestTarget.ftcPose.yaw;
+        targetX = bestTarget.ftcPose.x;
+        targetId = bestTarget.id;
+        targetAlliance = getAllianceFromTagId(targetId);
+        
+        double errorYaw = -targetYaw;
+        double errorX = -targetX;
+        double errorDistance = targetDistance - OPTIMAL_SHOOTING_DISTANCE;
+        
+        boolean perfectlyAligned = Math.abs(errorYaw) < TOLERANCE_YAW && 
+                                 Math.abs(errorX) < TOLERANCE_X && 
+                                 Math.abs(errorDistance) < TOLERANCE_DISTANCE;
+        
+        if (perfectlyAligned) {
+            targetLocked = true;
+            drive.drive(0, 0, 0);
+            
+            double optimalRpm = calculateRpmFromDistance(targetDistance);
+            if (!launching || Math.abs(wheelTargetRpm - optimalRpm) > 50) {
+                setShooterRPM(optimalRpm);
+            }
+            
+            manageShooterRPM();
+            
+        } else {
+            targetLocked = false;
+            double turnPower = errorYaw * TURN_GAIN;
+            double strafePower = errorX * STRAFE_GAIN;
+            double drivePower = errorDistance * DRIVE_GAIN;
+            
+            turnPower = Math.abs(turnPower) < 0.05 ? 0 : turnPower;
+            strafePower = Math.abs(strafePower) < 0.05 ? 0 : strafePower;
+            drivePower = Math.abs(drivePower) < 0.05 ? 0 : drivePower;
+            
+            double maxCorrection = 0.5;
+            turnPower = Math.max(-maxCorrection, Math.min(maxCorrection, turnPower));
+            strafePower = Math.max(-maxCorrection, Math.min(maxCorrection, strafePower));
+            drivePower = Math.max(-maxCorrection, Math.min(maxCorrection, drivePower));
+            
+            drive.drive(drivePower, strafePower, turnPower);
+            
+            double trackingRpm = calculateRpmFromDistance(targetDistance);
+            if (!launching || Math.abs(wheelTargetRpm - trackingRpm) > 100) {
+                setShooterRPM(trackingRpm);
+            }
+        }
+        
+        return true;
+    }
+    
+    // Yellow object tracking function
+    private boolean trackYellowObject() {
+        List<Double> yellowData = yellowPipeline.newerpython;
+        if (yellowData.size() < 3) {
+            yellowTargetLocked = false;
+            return false;
+        }
+        
+        // Get the closest yellow object (first in the list)
+        yellowTargetX = yellowData.get(0);
+        yellowTargetY = yellowData.get(1);
+        yellowTargetAngle = yellowData.get(2);
+        
+        // Convert pixel coordinates to error values
+        double centerX = 320; // Center of 640px wide image
+        double centerY = 240; // Center of 480px tall image
+        
+        double errorX = (yellowTargetX - centerX) / centerX; // Normalized error (-1 to 1)
+        double errorY = (yellowTargetY - centerY) / centerY; // Normalized error (-1 to 1)
+        
+        // Check if we're aligned with yellow object
+        boolean alignedWithYellow = Math.abs(errorX) < 0.1 && Math.abs(errorY) < 0.1;
+        
+        if (alignedWithYellow) {
+            yellowTargetLocked = true;
+            drive.drive(0, 0, 0);
+            
+            // Use fixed RPM for yellow objects or calculate based on size/area
+            if (!launching) {
+                setShooterRPM(3200.0);
+            }
+            
+            manageShooterRPM();
+            
+        } else {
+            yellowTargetLocked = false;
+            
+            // Track yellow object - only strafe and turn, no distance control
+            double turnPower = -errorX * YELLOW_TURN_GAIN;
+            double strafePower = -errorX * YELLOW_STRAFE_GAIN;
+            
+            turnPower = Math.abs(turnPower) < 0.05 ? 0 : turnPower;
+            strafePower = Math.abs(strafePower) < 0.05 ? 0 : strafePower;
+            
+            double maxCorrection = 0.4;
+            turnPower = Math.max(-maxCorrection, Math.min(maxCorrection, turnPower));
+            strafePower = Math.max(-maxCorrection, Math.min(maxCorrection, strafePower));
+            
+            drive.drive(0, strafePower, turnPower);
+            
+            // Set RPM for yellow object shooting
+            if (!launching) {
+                setShooterRPM(3200.0);
+            }
+        }
+        
+        return true;
+    }
+
+    @Override
+    public void loop() {
+        // Alliance toggle with Y button
+        boolean currentY = gamepad1.y;
+        if (currentY && !lastY) {
+            redAlliance = !redAlliance;
+        }
+        lastY = currentY;
+
+        // AprilTag auto-targeting toggle with X button
+        boolean currentX = gamepad1.x;
+        if (currentX && !lastX) {
+            autoTargetEnabled = !autoTargetEnabled;
+            yellowTrackingEnabled = false; // Disable yellow tracking when enabling AprilTag
+            rotatingToTarget = false; // Cancel rotation when switching modes
+            if (!autoTargetEnabled) {
+                launch.stopLaunch();
+                launching = false;
+                shooterReady = false;
+                drive.drive(0, 0, 0);
+            } else {
+                setShooterRPM(3000.0);
+            }
+        }
+        lastX = currentX;
+        
+        // Yellow object tracking toggle with B button
+        boolean currentB = gamepad1.b;
+        if (currentB && !lastB) {
+            yellowTrackingEnabled = !yellowTrackingEnabled;
+            autoTargetEnabled = false; // Disable AprilTag when enabling yellow tracking
+            rotatingToTarget = false; // Cancel rotation when switching modes
+            if (!yellowTrackingEnabled) {
+                launch.stopLaunch();
+                launching = false;
+                shooterReady = false;
+                drive.drive(0, 0, 0);
+            } else {
+                setShooterRPM(3200.0);
+            }
+        }
+        lastB = currentB;
+        
+        // Rotation to AprilTag with Circle button
+        boolean currentCircle = gamepad1.circle;
+        if (currentCircle && !lastCircle) {
+            rotatingToTarget = !rotatingToTarget;
+            if (rotatingToTarget) {
+                // Start rotation sequence
+                rotationStartTime = getRuntime();
+                autoTargetEnabled = false;
+                yellowTrackingEnabled = false;
+                telemetry.addData("Rotation", "STARTED - Rotating to face AprilTag");
+            } else {
+                // Cancel rotation
+                drive.drive(0, 0, 0);
+                telemetry.addData("Rotation", "CANCELLED");
+            }
+        }
+        lastCircle = currentCircle;
+        
+        // Handle rotation to target mode (highest priority)
+        if (rotatingToTarget) {
+            boolean rotationSuccess = rotateRobotToAprilTag();
+            if (!rotationSuccess) {
+                rotatingToTarget = false;
+            }
+            
+            // Manual push bar control still available during rotation
+            if (gamepad1.right_bumper) {
+                bar.pushBall(0.55, 0.2);
+            }
+            
+        } else if (!autoTargetEnabled && !yellowTrackingEnabled) {
+            // ===================== MANUAL DRIVE CONTROL =====================
+            double forward = dead(-gamepad1.left_stick_y);
+            double right = dead(gamepad1.left_stick_x);
+            double rotate = dead(-gamepad1.right_stick_x);
+            drive.drive(forward, right, rotate);
+
+            // Push bar control
+            boolean rightBumper = gamepad1.right_bumper;
+            if (rightBumper && !lastRightBumper) {
+                barExtended = !barExtended;
+                if (barExtended) {
+                    bar.pushBall(0.55, 0.2);
+                } else {
+                    bar.release(0.65, 1.0);
+                }
+            }
+            lastRightBumper = rightBumper;
+
+            // Manual shooter control
+            manageShooterRPM();
+
+            // Manual RPM adjustment
+            boolean dpadUp = gamepad1.dpad_up;
+            if (dpadUp && !lastDpadUp) {
+                if (launching) {
+                    wheelTargetRpm = launch.adjustLaunchRpm(wheelTargetRpm, wheelRpmAdjustment);
+                    launch.startLaunch(wheelTargetRpm);
+                } else {
+                    setShooterRPM(3000.0);
+                }
+            }
+            lastDpadUp = dpadUp;
+
+            boolean dpadDown = gamepad1.dpad_down;
+            if (dpadDown && !lastDpadDown) {
+                if (launching) {
+                    wheelTargetRpm = launch.adjustLaunchRpm(wheelTargetRpm, -wheelRpmAdjustment);
+                    launch.startLaunch(wheelTargetRpm);
+                } else {
+                    setShooterRPM(2500.0);
+                }
+            }
+            lastDpadDown = dpadDown;
+
+            // Manual preset RPM buttons
+            if (gamepad1.a && !launching) {
+                setShooterRPM(3800.0);
+            }
+
+            if (gamepad1.b && !launching) {
+                setShooterRPM(3400.0);
+            }
+            
+            // Stop shooter with Y button
+            if (gamepad1.y && launching) {
+                launch.stopLaunch();
+                launching = false;
+            }
+            
+        } else if (autoTargetEnabled) {
+            // ===================== APRILTAG TRACKING MODE =====================
+            boolean targetAcquired = acquireAndTrackAprilTag();
+            if (!targetAcquired) {
+                drive.drive(0, 0, 0.15);
+            }
+            
+            // Manual push bar control
+            if (gamepad1.right_bumper) {
+                bar.pushBall(0.55, 0.2);
+            }
+            
+        } else if (yellowTrackingEnabled) {
+            // ===================== YELLOW OBJECT TRACKING MODE =====================
+            boolean yellowTargetAcquired = trackYellowObject();
+            if (!yellowTargetAcquired) {
+                drive.drive(0, 0, 0.1);
+            }
+            
+            // Manual push bar control
+            if (gamepad1.right_bumper) {
+                bar.pushBall(0.55, 0.2);
+            }
+        }
+        
+        // Intake control (all modes)
+        if (gamepad1.left_bumper) {
+            intake.setIntakePower(-1.0);
+        } else {
+            intake.setIntakePower(gamepad1.left_trigger);
+        }
+        
+        // Update RPM reading
+        launchRpm = launch.currentWheelRpm();
+        
+        // ===================== TELEMETRY =====================
+        telemetry.addLine("=== VISION SYSTEMS ===");
+        telemetry.addData("Current Alliance", redAlliance ? "RED 🔴" : "BLUE 🔵");
+        
+        if (rotatingToTarget) {
+            telemetry.addData("Mode", "ROTATING TO APRILTAG 🔄");
+            telemetry.addData("Status", "Facing AprilTag...");
+        } else if (autoTargetEnabled) {
+            telemetry.addData("Mode", "APRILTAG TRACKING 🎯");
+            telemetry.addData("Target Lock", targetLocked ? "LOCKED 🔒" : "TRACKING 🔍");
+            telemetry.addData("Detected Tag", "ID: %d (%s)", targetId, targetAlliance);
+            telemetry.addData("Distance", "%.1f inches", targetDistance);
+            telemetry.addData("Alignment", "Yaw: %.1f° | X: %.1f\"", targetYaw, targetX);
+        } else if (yellowTrackingEnabled) {
+            telemetry.addData("Mode", "YELLOW OBJECT TRACKING 🟡");
+            telemetry.addData("Yellow Target Lock", yellowTargetLocked ? "LOCKED 🔒" : "TRACKING 🔍");
+            telemetry.addData("Yellow Object", "X: %.1f, Y: %.1f, Angle: %.1f", 
+                yellowTargetX, yellowTargetY, yellowTargetAngle);
+            telemetry.addData("Yellow Objects Found", yellowPipeline.newerpython.size() / 3);
+        } else {
+            telemetry.addData("Mode", "MANUAL CONTROL 🕹️");
+        }
+        
+        telemetry.addLine("=== SHOOTER CONTROL ===");
+        telemetry.addData("Status", launching ? (shooterReady ? "READY TO FIRE! 🎯" : "SPINNING UP...") : "STANDBY");
+        telemetry.addData("Target RPM", "%.0f", wheelTargetRpm);
+        telemetry.addData("Actual RPM", "%.0f", launchRpm);
+        telemetry.addData("RPM Error", "%.0f", Math.abs(launchRpm - wheelTargetRpm));
+        
+        telemetry.addLine("=== CONTROLS ===");
+        telemetry.addData("Y", "Toggle Alliance / Stop Shooter");
+        telemetry.addData("X", "Toggle AprilTag Tracking");
+        telemetry.addData("B", "Toggle Yellow Object Tracking");
+        telemetry.addData("○ Circle", "Rotate Robot to Face AprilTag");
+        telemetry.addData("A/B", "Manual Preset RPM (3800/3400)");
+        telemetry.addData("D-Pad", "Manual RPM Adjust");
+        telemetry.addData("RB", "Push Bar");
+        telemetry.addData("LB", "Reverse Intake");
+        telemetry.addData("LT", "Intake Power");
+        
+        if ((targetLocked && shooterReady) || (yellowTargetLocked && shooterReady)) {
+            telemetry.addLine("🎯 *** PERFECTLY ALIGNED & READY TO FIRE! *** 🎯");
+        }
+        
+        telemetry.update();
+    }
+    
+    @Override
+    public void stop() {
+        if (visionPortal != null) {
+            visionPortal.close();
+        }
+        if (yellowCamera != null) {
+            yellowCamera.stopStreaming();
+        }
+        if (launching) {
+            launch.stopLaunch();
+        }
+        super.stop();
+    }
+    
+    // Yellow Vision Pipeline (from your provided code)
+    public class YellowVisionPipeline extends OpenCvPipeline {
+        
+        // Constants for filtering contours
+        public static final double SMALL_CONTOUR_AREA = 100;
+        public List<Double> newerpython = new ArrayList<>();
+        
+        // Color detection ranges for yellow in HSV
+        public static final double hue_low = 0;
+        public static final double hue_high = 50;
+        public static final double sat_low = 100;
+        public static final double sat_high = 255;
+        public static final double value_low = 0;
+        public static final double value_high = 255;
+        
+        public Scalar HSV_YELLOW_LOWER = new Scalar(hue_low, sat_low, value_low);
+        public Scalar HSV_YELLOW_UPPER = new Scalar(hue_high, sat_high, value_high);
+        
+        // Camera parameters
+        public static final int IMAGE_WIDTH = 640;
+        public static final int IMAGE_HEIGHT = 480;
+        
+        @Override
+        public Mat processFrame(Mat frame) {
+            Mat hsv = new Mat();
+            Mat yellowMask = new Mat();
+            
+            try {
+                // Convert to HSV color space
+                Imgproc.cvtColor(frame, hsv, Imgproc.COLOR_BGR2HSV);
+                
+                // Create yellow mask
+                Core.inRange(hsv, HSV_YELLOW_LOWER, HSV_YELLOW_UPPER, yellowMask);
+                
+                // Find contours
+                List<MatOfPoint> contours = new ArrayList<>();
+                Mat hierarchy = new Mat();
+                Imgproc.findContours(yellowMask, contours, hierarchy, Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_SIMPLE);
+                
+                // Clear previous results
+                newerpython.clear();
+                
+                // Process contours
+                for (int i = 0; i < contours.size(); i++) {
+                    MatOfPoint contour = contours.get(i);
+                    double area = Imgproc.contourArea(contour);
+                    
+                    if (area < SMALL_CONTOUR_AREA) continue;
+                    
+                    // Calculate contour moments for center
+                    Moments M = Imgproc.moments(contour);
+                    if (M.get_m00() == 0) continue;
+                    
+                    Point center = new Point(M.get_m10() / M.get_m00(), M.get_m01() / M.get_m00());
+                    
+                    // Calculate angle using min area rect
+                    MatOfPoint2f contour2f = new MatOfPoint2f(contour.toArray());
+                    RotatedRect rect = Imgproc.minAreaRect(contour2f);
+                    double angle = rect.angle;
+                    
+                    // Add to results
+                    newerpython.add(center.x);
+                    newerpython.add(center.y);
+                    newerpython.add(angle);
+                    
+                    // Draw on frame for visualization
+                    Imgproc.drawContours(frame, contours, i, new Scalar(0, 255, 255), 2);
+                    Imgproc.circle(frame, center, 5, new Scalar(0, 255, 0), -1);
+                    Imgproc.putText(frame, "Yellow", new Point(center.x - 20, center.y - 10), 
+                                   Imgproc.FONT_HERSHEY_SIMPLEX, 0.5, new Scalar(0, 255, 255), 2);
+                }
+                
+                return frame;
+                
+            } catch (Exception e) {
+                telemetry.addData("Yellow Pipeline Error", e.getMessage());
+                return frame;
+            } finally {
+                hsv.release();
+                yellowMask.release();
+            }
+        }
+    }
+}
